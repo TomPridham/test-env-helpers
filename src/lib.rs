@@ -10,7 +10,7 @@ pub fn before_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
             let (brace, items) = m.content.unwrap();
             let (before_each_fn, everything_else): (Vec<Item>, Vec<Item>) =
                 items.into_iter().partition(|t| match t {
-                    Item::Fn(f) => f.sig.ident.to_string() == "before_each",
+                    Item::Fn(f) => f.sig.ident == "before_each",
                     _ => false,
                 });
             let before_each_fn_block = if before_each_fn.len() != 1 {

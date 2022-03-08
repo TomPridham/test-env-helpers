@@ -16,7 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-          repository: test-env-helpers
           fetch-depth: "0"
 
       - name: Get version from PR
@@ -37,7 +36,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-          repository: test-env-helpers
           fetch-depth: "0"
 
       - name: Cache cargo release and rust install steps

@@ -1,0 +1,15 @@
+[package]
+name = "test-env-helpers"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.86", features = ["full", "fold", "extra-traits"] }
+quote = "1.0.15"
+
+[dev-dependencies]
+test-case = "2.0.0"
+tokio = { version = "1.17.0", features = ["macros", "test-util"] }

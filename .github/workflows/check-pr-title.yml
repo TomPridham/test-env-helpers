@@ -1,0 +1,15 @@
+name: Check PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: deepakputhraya/action-pr-title@master
+        with:
+          allowed_prefixes: "#major,#minor,#patch,#none" # title should start with the given prefix
+          prefix_case_sensitive: false # title prefix are case insensitive
+          github_token: ${{ github.token }}

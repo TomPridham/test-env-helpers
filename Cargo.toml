@@ -2,13 +2,24 @@
 name = "test-env-helpers"
 version = "0.1.0"
 edition = "2021"
+description = "A few helper macros that adds some functionality to the Rust test runner that I missed from Jest."
+readme = "README.md"
+repository = "https://github.com/TomPridham/test-env-helpers"
+license = "MIT"
+keywords = [
+  "afterEach",
+  "beforeEach",
+  "setup",
+  "teardown",
+  "test",
+]
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.86", features = ["full", "fold", "extra-traits"] }
 quote = "1.0.15"
+syn = { version = "1.0.86", features = ["full", "fold", "extra-traits"] }
 
 [dev-dependencies]
 test-case = "2.0.0"

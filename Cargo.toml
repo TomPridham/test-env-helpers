@@ -22,5 +22,6 @@ quote = "1.0.15"
 syn = { version = "1.0.86", features = ["full", "fold", "extra-traits"] }
 
 [dev-dependencies]
+lazy_static = "1.4.0"
 test-case = "2.0.0"
 tokio = { version = "1.17.0", features = ["macros", "test-util"] }

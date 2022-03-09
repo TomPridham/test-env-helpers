@@ -258,3 +258,8 @@ pub fn before_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     };
     TokenStream::from(quote! {#input})
 }
+
+#[proc_macro_attribute]
+pub fn skip(_metadata: TokenStream, _input: TokenStream) -> TokenStream {
+    TokenStream::from(quote! {})
+}

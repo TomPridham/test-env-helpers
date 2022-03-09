@@ -2,7 +2,7 @@ use test_env_helpers::*;
 
 #[before_all]
 #[cfg(test)]
-mod abefore_all {
+mod before_all {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use test_case::test_case;
     use tokio;

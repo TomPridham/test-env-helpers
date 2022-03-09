@@ -1,8 +1,89 @@
+//
+//! Some setup and teardown macro helpers to mimic [Jest's setup and teardown](https://jestjs.io/docs/setup-teardown)
+//! functionality. Also includes a `skip` macro that mimics the [skip](https://jestjs.io/docs/api#testskipname-fn)
+//! functionality in Jest.
+//!
+//! There are currently five macros provided: `after_all`,
+//! `after_each`, `before_all`, `before_each`, and `skip`. I would like to implement `only` to
+//! match [Jest's only](https://jestjs.io/docs/api#testonlyname-fn-timeout) functionality. I'm
+//! unsure of a great way to do that currently, however.
+//!
+//! ## Getting Started
+//! Using these macros is fairly simple. The four after/before functions all require a function
+//! with the same name as the attribute and are only valid when applied to a mod. They are all used
+//! like in the below example. Replace `before_each` with whichever method you want to use. The
+//! code in the matching function will be inserted into every fn in the containing mod that has an
+//! attribute with the word "test" in it. This is to allow for use with not just normal `#[test]`
+//! attributes, but also other flavors like `#[tokio::test]` and `#[test_case(0)]`.
+//! ```
+//! #[cfg(test)]
+//! use test_env_helpers::*;
+//!
+//! #[before_each]
+//! #[cfg(test)]
+//! mod my_tests{
+//!     fn before_each(){println!("I'm in every test!")}
+//!     #[test]
+//!     fn test_1(){}
+//!     #[test]
+//!     fn test_2(){}
+//!     #[test]
+//!     fn test_3(){}
+//! }
+//! ```
+//!
+//! The `skip` macro is valid on either a mod or an individual test and will remove the mod or test
+//! it is applied to. You can use it to skip tests that aren't working correctly or that you don't
+//! want to run for some reason.
+//!
+//! ```
+//! #[cfg(test)]
+//! use test_env_helpers::*;
+//!
+//! #[cfg(test)]
+//! mod my_tests{
+//!     #[skip]
+//!     #[test]
+//!     fn broken_test(){panic!("I'm hella broke")}
+//!     #[skip]
+//!     mod broken_mod{
+//!         #[test]
+//!         fn i_will_not_be_run(){panic!("I get skipped too")}
+//!     }
+//!     #[test]
+//!     fn test_2(){}
+//!     #[test]
+//!     fn test_3(){}
+//! }
+//! ```
+
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, parse_quote, Item, Stmt};
 
+/// Will run the code in the matching `after_all` function exactly once when all of the tests have
+/// run. This works by counting the number of `#[test]` attributes and decrementing a counter at
+/// the beginning of every test. Once the counter reaches 0, it will run the code in `after_all`.
+/// It uses [std::sync::Once](https://doc.rust-lang.org/std/sync/struct.Once.html) internally
+/// to ensure that the code is run at maximum one time.
+///
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[after_all]
+/// #[cfg(test)]
+/// mod my_tests{
+///     fn after_all(){println!("I only get run once at the very end")}
+///     #[test]
+///     fn test_1(){}
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let input: Item = match parse_macro_input!(input as Item) {
@@ -44,8 +125,6 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                                 attr.path
                                     .segments
                                     .iter()
-                                    // only apply after_all biz to functions with test attributes, this
-                                    // includes variants like `tokio::test`, `test_case`
                                     .any(|segment| segment.ident.to_string().contains("test"))
                             })
                             .count();
@@ -79,7 +158,6 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
             m.content = Some((brace, once_content));
             Item::Mod(m)
         }
-
         _ => {
             panic!("The `after_all` macro attribute is only valid when called on a module.")
         }
@@ -87,6 +165,26 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(quote! (#input))
 }
 
+/// Will run the code in the matching `after_each` function at the end of every `#[test]` function.
+/// Useful if you want to cleanup after a test or reset some external state. If the test panics,
+/// this code will not be run. If you need something that is infallible, you should use
+/// `before_each` instead.
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[after_each]
+/// #[cfg(test)]
+/// mod my_tests{
+///     fn after_each(){println!("I get run at the very end of each function")}
+///     #[test]
+///     fn test_1(){}
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn after_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let input: Item = match parse_macro_input!(input as Item) {
@@ -114,8 +212,6 @@ pub fn after_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             attr.path
                                 .segments
                                 .iter()
-                                // only apply after_each biz to functions with test attributes, this
-                                // includes variants like `tokio::test`, `test_case`
                                 .any(|segment| segment.ident.to_string().contains("test"))
                         }) {
                             f.block.stmts.append(&mut after_each_fn_block.stmts.clone());
@@ -138,6 +234,26 @@ pub fn after_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {#input})
 }
 
+/// Will run the code in the matching `before_all` function exactly once at the very beginning of a
+/// test run. It uses [std::sync::Once](https://doc.rust-lang.org/std/sync/struct.Once.html) internally
+/// to ensure that the code is run at maximum one time. Useful for setting up some external state
+/// that will be reused in multiple tests.
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[before_all]
+/// #[cfg(test)]
+/// mod my_tests{
+///     fn before_all(){println!("I get run at the very beginning of the test suite")}
+///     #[test]
+///     fn test_1(){}
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let input: Item = match parse_macro_input!(input as Item) {
@@ -170,8 +286,6 @@ pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             attr.path
                                 .segments
                                 .iter()
-                                // only apply before_all biz to functions with test attributes, this
-                                // includes variants like `tokio::test`, `test_case`
                                 .any(|segment| segment.ident.to_string().contains("test"))
                         }) {
                             let mut stmts = vec![q.clone()];
@@ -206,6 +320,65 @@ pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(quote! (#input))
 }
 
+/// Will run the code in the matching `before_each` function at the beginning of every test. Useful
+/// to reset state to ensure that a test has a clean slate.
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[before_each]
+/// #[cfg(test)]
+/// mod my_tests{
+///     fn before_each(){println!("I get run at the very beginning of every test")}
+///     #[test]
+///     fn test_1(){}
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
+///
+/// Can be used to reduce the amount of boilerplate setup code that needs to be copied into each test.
+/// For example, if you need to ensure that tests in a single test suite are not run in parallel, this can
+/// easily be done with a [Mutex](https://doc.rust-lang.org/std/sync/struct.Mutex.html).
+/// However, remembering to copy and paste the code to acquire a lock on the `Mutex` in every test
+/// is tedious and error prone.
+/// ```
+/// #[cfg(test)]
+/// mod without_before_each{
+///     lazy_static! {
+///         static ref MTX: Mutex<()> = Mutex::new(());
+///     }
+///     #[test]
+///     fn test_1(){let _m = MTX.lock();}
+///     #[test]
+///     fn test_2(){let _m = MTX.lock();}
+///     #[test]
+///     fn test_3(){let _m = MTX.lock();}
+/// }
+/// ```
+/// Using `before_each` removes the need to copy and paste so much and makes making changes easier
+/// because they only need to be made in a single location instead of once for every test.
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[before_each]
+/// #[cfg(test)]
+/// mod with_before_each{
+///     lazy_static! {
+///         static ref MTX: Mutex<()> = Mutex::new(());
+///     }
+///     fn before_each(){let _m = MTX.lock();}
+///     #[test]
+///     fn test_1(){}
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn before_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let input: Item = match parse_macro_input!(input as Item) {
@@ -233,8 +406,6 @@ pub fn before_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             attr.path
                                 .segments
                                 .iter()
-                                // only apply before_each biz to functions with test attributes, this
-                                // includes variants like `tokio::test`, `test_case`
                                 .any(|segment| segment.ident.to_string().contains("test"))
                         }) {
                             let mut b = before_each_fn_block.stmts.clone();
@@ -259,6 +430,30 @@ pub fn before_each(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {#input})
 }
 
+/// Will skip running the code it is applied on. You can use it to skip tests that aren't working
+/// correctly or that you don't want to run for some reason. There are no checks to make sure it's
+/// applied to a `#[test]` or mod. It will remove whatever it is applied to from the final AST.
+///
+/// ```
+/// #[cfg(test)]
+/// use test_env_helpers::*;
+///
+/// #[cfg(test)]
+/// mod my_tests{
+///     #[skip]
+///     #[test]
+///     fn broken_test(){panic!("I'm hella broke")}
+///     #[skip]
+///     mod broken_mod{
+///         #[test]
+///         fn i_will_not_be_run(){panic!("I get skipped too")}
+///     }
+///     #[test]
+///     fn test_2(){}
+///     #[test]
+///     fn test_3(){}
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn skip(_metadata: TokenStream, _input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {})

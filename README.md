@@ -1,3 +1,7 @@
+[![Build Status](https://github.com/tompridham/test-env-helpers/actions/workflows/deploy.yml/badge.svg)](https://github.com/tompridham/test-env-helpers/actions/workflows/deploy.yml)
+[![Crates.io](https://img.shields.io/crates/v/test-env-helpers.svg)](https://crates.io/crates/test-env-helpers)
+[![Documentation](https://docs.rs/test-env-helpers/badge.svg)](https://docs.rs/test-env-helpers)
+
 ## Description
 Jest style setup and teardown test helpers.
 

@@ -1,18 +1,17 @@
+
 [package]
 name = "test-env-helpers"
 version = "0.2.0"
+authors = ["Tom Pridham <pridham.tom@gmail.com>"]
 edition = "2021"
-description = "A few helper macros that adds some functionality to the Rust test runner that I missed from Jest."
+description = "Jest style setup and teardown test helper macros"
+documentation = "https://docs.rs/test-env-helpers/latest/test_env_helpers/"
 readme = "README.md"
+homepage = "https://docs.rs/test-env-helpers/latest/test_env_helpers/"
 repository = "https://github.com/TomPridham/test-env-helpers"
 license = "MIT"
-keywords = [
-  "afterEach",
-  "beforeEach",
-  "setup",
-  "teardown",
-  "test",
-]
+keywords = ["afterEach", "beforeEach", "setup", "teardown", "test"]
+exclude = ["tests/*"]
 
 [lib]
 proc-macro = true

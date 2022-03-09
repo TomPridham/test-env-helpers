@@ -57,6 +57,11 @@ jobs:
           command: install
           args: cargo-release
 
+      - name: Setup Git info
+        run: |
+          git config user.name "tom pridham"
+          git config user.email "pridham.tom@gmail.com"
+
       - name: Create tag and update Cargo.toml
         uses: actions-rs/cargo@v1
         with:

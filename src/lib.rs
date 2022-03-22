@@ -58,6 +58,10 @@
 //! ```
 
 extern crate proc_macro;
+mod utils;
+
+use crate::utils::traverse_use_item;
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, parse_quote, Item, Stmt};
@@ -114,6 +118,10 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
             };
 
             let mut count: usize = 0;
+            let mut has_once: bool = false;
+            let mut has_atomic_usize: bool = false;
+            let mut has_ordering: bool = false;
+
             let mut e: Vec<Item> = everything_else
                 .into_iter()
                 .map(|t| match t {
@@ -139,11 +147,41 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             Item::Fn(f)
                         }
                     }
-                    e => e,
+                    Item::Use(use_stmt) => {
+                        if traverse_use_item(&use_stmt.tree, vec!["std", "sync", "Once"]).is_some()
+                        {
+                            has_once = true;
+                        }
+                        if traverse_use_item(
+                            &use_stmt.tree,
+                            vec!["std", "sync", "atomic", "AtomicUsize"],
+                        )
+                        .is_some()
+                        {
+                            has_atomic_usize = true;
+                        }
+                        if traverse_use_item(
+                            &use_stmt.tree,
+                            vec!["std", "sync", "atomic", "Ordering"],
+                        )
+                        .is_some()
+                        {
+                            has_ordering = true;
+                        }
+                        Item::Use(use_stmt)
+                    }
+                    el => el,
                 })
                 .collect();
+
             let use_once: Item = parse_quote!(
                 use std::sync::Once;
+            );
+            let use_atomic_usize: Item = parse_quote!(
+                use std::sync::atomic::AtomicUsize;
+            );
+            let use_ordering: Item = parse_quote!(
+                use std::sync::atomic::Ordering;
             );
             let static_once: Item = parse_quote!(
                 static AFTER_ALL: Once = Once::new();
@@ -152,7 +190,18 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                 static REMAINING_TESTS: AtomicUsize = AtomicUsize::new(#count);
             );
 
-            let mut once_content = vec![use_once, static_once, static_count];
+            let mut once_content = vec![];
+
+            if !has_once {
+                once_content.push(use_once);
+            }
+            if !has_atomic_usize {
+                once_content.push(use_atomic_usize);
+            }
+            if !has_ordering {
+                once_content.push(use_ordering);
+            }
+            once_content.append(&mut vec![static_once, static_count]);
             once_content.append(&mut e);
 
             m.content = Some((brace, once_content));
@@ -278,6 +327,7 @@ pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                 });
             };
 
+            let mut has_once: bool = false;
             let mut e: Vec<Item> = everything_else
                 .into_iter()
                 .map(|t| match t {
@@ -296,6 +346,13 @@ pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             Item::Fn(f)
                         }
                     }
+                    Item::Use(use_stmt) => {
+                        if traverse_use_item(&use_stmt.tree, vec!["std", "sync", "Once"]).is_some()
+                        {
+                            has_once = true;
+                        }
+                        Item::Use(use_stmt)
+                    }
                     e => e,
                 })
                 .collect();
@@ -306,7 +363,11 @@ pub fn before_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                 static BEFORE_ALL: Once = Once::new();
             );
 
-            let mut once_content = vec![use_once, static_once];
+            let mut once_content = vec![];
+            if !has_once {
+                once_content.push(use_once);
+            }
+            once_content.push(static_once);
             once_content.append(&mut e);
 
             m.content = Some((brace, once_content));

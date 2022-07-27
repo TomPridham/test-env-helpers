@@ -11,7 +11,7 @@ mod after_all {
 
     static T: AtomicUsize = AtomicUsize::new(0);
     fn after_all() {
-        assert_eq!(T.load(Ordering::SeqCst), 9);
+        assert_eq!(T.load(Ordering::SeqCst), 10);
     }
 
     #[test]
@@ -23,9 +23,17 @@ mod after_all {
         thread::sleep(Duration::from_millis(5));
         T.fetch_add(3, Ordering::SeqCst);
     }
+
     #[tokio::test]
     async fn async_test_macro() {
         T.fetch_add(3, Ordering::SeqCst);
+    }
+
+    #[test]
+    #[should_panic]
+    fn failing_test() {
+        T.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(0, 1);
     }
 }
 

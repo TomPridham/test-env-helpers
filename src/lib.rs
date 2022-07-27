@@ -106,11 +106,8 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                     _ => unreachable!(),
                 }
             };
-            let inc_count: Stmt = parse_quote!(
-                REMAINING_TESTS.fetch_sub(1, Ordering::SeqCst);
-            );
             let after_all_if: Stmt = parse_quote! {
-                if REMAINING_TESTS.load(Ordering::SeqCst) <= 0{
+                if REMAINING_TESTS.fetch_sub(1, Ordering::SeqCst) == 1 {
                     AFTER_ALL.call_once(|| {
                         #after_all_fn_block
                     });
@@ -138,7 +135,7 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             .count();
                         if test_count > 0 {
                             count += test_count;
-                            let mut stmts = vec![inc_count.clone()];
+                            let mut stmts = vec![];
                             stmts.append(&mut f.block.stmts);
                             stmts.push(after_all_if.clone());
                             f.block.stmts = stmts;

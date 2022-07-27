@@ -4,6 +4,8 @@ use test_env_helpers::*;
 #[cfg(test)]
 mod after_all {
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
+    use std::time::Duration;
     use test_case::test_case;
     use tokio;
 
@@ -17,6 +19,8 @@ mod after_all {
     #[test_case(1)]
     #[test_case(2)]
     fn async_test_macro_2(_: u8) {
+        //emulates slow test
+        thread::sleep(Duration::from_millis(5));
         T.fetch_add(3, Ordering::SeqCst);
     }
     #[tokio::test]

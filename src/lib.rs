@@ -64,7 +64,10 @@ use crate::utils::traverse_use_item;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, parse_quote, Item, Stmt};
+use syn::Stmt;
+use syn::Item;
+use syn::parse_quote;
+use syn::parse_macro_input;
 
 /// Will run the code in the matching `after_all` function exactly once when all of the tests have
 /// run. This works by counting the number of `#[test]` attributes and decrementing a counter at
@@ -106,21 +109,23 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                     _ => unreachable!(),
                 }
             };
-            let inc_count: Stmt = parse_quote!(
-                REMAINING_TESTS.fetch_sub(1, Ordering::SeqCst);
-            );
             let after_all_if: Stmt = parse_quote! {
-                if REMAINING_TESTS.load(Ordering::SeqCst) <= 0{
+                if REMAINING_TESTS.fetch_sub(1, Ordering::SeqCst) == 1 {
                     AFTER_ALL.call_once(|| {
                         #after_all_fn_block
                     });
                 }
             };
-
+            let resume: Stmt = parse_quote! {
+                if let Err(err) = result {
+                    panic::resume_unwind(err);
+                }
+            };
             let mut count: usize = 0;
             let mut has_once: bool = false;
             let mut has_atomic_usize: bool = false;
             let mut has_ordering: bool = false;
+            let mut has_panic: bool = false;
 
             let mut e: Vec<Item> = everything_else
                 .into_iter()
@@ -138,10 +143,13 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                             .count();
                         if test_count > 0 {
                             count += test_count;
-                            let mut stmts = vec![inc_count.clone()];
-                            stmts.append(&mut f.block.stmts);
-                            stmts.push(after_all_if.clone());
-                            f.block.stmts = stmts;
+                            let block = f.block.clone();
+                            let catch_unwind: Stmt = parse_quote! {
+                                let result = panic::catch_unwind(|| {
+                                    #block
+                                });
+                            };
+                            f.block.stmts = vec![catch_unwind, after_all_if.clone(), resume.clone()];
                             Item::Fn(f)
                         } else {
                             Item::Fn(f)
@@ -168,6 +176,13 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
                         {
                             has_ordering = true;
                         }
+                        if traverse_use_item(
+                            &use_stmt.tree,
+                            vec!["std", "panic"],
+                        )
+                        .is_some() {
+                            has_panic = true;
+                        }
                         Item::Use(use_stmt)
                     }
                     el => el,
@@ -182,6 +197,9 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
             );
             let use_ordering: Item = parse_quote!(
                 use std::sync::atomic::Ordering;
+            );
+            let use_panic: Item = parse_quote!(
+                use std::panic;
             );
             let static_once: Item = parse_quote!(
                 static AFTER_ALL: Once = Once::new();
@@ -200,6 +218,9 @@ pub fn after_all(_metadata: TokenStream, input: TokenStream) -> TokenStream {
             }
             if !has_ordering {
                 once_content.push(use_ordering);
+            }
+            if !has_panic {
+                once_content.push(use_panic);
             }
             once_content.append(&mut vec![static_once, static_count]);
             once_content.append(&mut e);
